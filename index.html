@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard ผลการจัดส่งรายงานเฝ้าระวังโรค D506</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; color: #1e293b; font-size: 14px; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.3); }
+        
+        .badge-3d {
+            box-shadow: 0 4px 0 #047857, 0 8px 15px rgba(0,0,0,0.1);
+            border-top: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .card-3d { transition: all 0.2s ease; cursor: default; }
+        .card-3d:hover { transform: translateY(-3px); }
+        
+        .c-blue { background: linear-gradient(135deg, #3b82f6, #1d4ed8); box-shadow: 0 6px 0 #1e40af, 0 12px 20px rgba(30,64,175,0.15); }
+        .c-emerald { background: linear-gradient(135deg, #10b981, #047857); box-shadow: 0 6px 0 #065f46, 0 12px 20px rgba(6,95,70,0.15); }
+        .c-cyan { background: linear-gradient(135deg, #06b6d4, #0891b2); box-shadow: 0 6px 0 #0e7490, 0 12px 20px rgba(14,116,144,0.15); }
+        .c-rose { background: linear-gradient(135deg, #f43f5e, #be123c); box-shadow: 0 6px 0 #9f1239, 0 12px 20px rgba(159,18,57,0.15); }
+
+        .v-divider { border-right: 3px solid #e2e8f0; }
+        th { white-space: nowrap; font-weight: 800; text-align: center !important; }
+        
+        .row-sent-ontime { background-color: #f0fdf4; }
+        .row-sent-zero { background-color: #eff6ff; }
+        .row-sent-late { background-color: #fffbeb; }
+        .row-missing { background-color: #fff1f2; }
+        
+        /* Fixed Column Widths for Alignment */
+        .col-stats-total { width: 140px; }
+        .col-stats-item { width: 100px; }
+    </style>
+</head>
+<body class="min-h-screen pb-8">
+
+    <div class="max-w-[1500px] mx-auto p-4 md:p-6">
+        
+        <!-- Header Section -->
+        <header class="bg-white p-5 rounded-3xl shadow-lg mb-6 border border-slate-100 flex flex-col lg:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-6">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Ministry_of_Public_Health_Logo_%28Thailand%29.svg/120px-Ministry_of_Public_Health_Logo_%28Thailand%29.svg.png" 
+                     alt="MOPH" class="w-16 h-16 object-contain">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-emerald-700 to-teal-500 tracking-tight">
+                        Dashboard ผลการจัดส่งรายงานเฝ้าระวังโรค D506
+                    </h1>
+                    <div class="flex items-center gap-3 mt-0.5">
+                        <h2 class="text-lg font-bold text-slate-600">จังหวัดอุดรธานี</h2>
+                        <span class="text-slate-300">|</span>
+                        <p id="currentWeekRange" class="text-slate-400 font-bold text-sm flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            รอการอัปโหลดไฟล์
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div id="dropZone" class="group bg-slate-50 hover:bg-emerald-50 px-6 py-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-emerald-500 cursor-pointer transition-all flex items-center gap-3">
+                    <i data-lucide="upload-cloud" class="w-6 h-6 text-emerald-500"></i>
+                    <div>
+                        <p class="font-black text-slate-700 text-sm">อัปโหลดไฟล์</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">CSV Only</p>
+                    </div>
+                    <input type="file" id="csvInput" accept=".csv" class="hidden">
+                </div>
+
+                <div id="weekBadgeContainer" class="hidden relative">
+                    <div class="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl badge-3d flex flex-col items-center justify-center text-white">
+                        <span class="text-[8px] font-black uppercase opacity-80">W</span>
+                        <span id="displayWeek" class="text-3xl font-black leading-none my-0.5">--</span>
+                        <span class="text-[8px] font-bold bg-emerald-800/20 px-2 py-0.5 rounded-full">2569</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main id="dashboardArea" class="hidden space-y-6">
+            
+            <!-- Row 1: 4 Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="card-3d c-blue rounded-3xl p-5 text-white relative overflow-hidden group">
+                    <i data-lucide="send" class="absolute -right-4 -bottom-4 w-20 h-20 opacity-10"></i>
+                    <div class="relative z-10">
+                        <span class="text-[10px] font-black uppercase tracking-widest opacity-80">ผลการส่งในสัปดาห์</span>
+                        <h3 id="statRate" class="text-3xl font-black mb-1 tracking-tighter">0%</h3>
+                        <p id="statCount" class="text-xs font-bold bg-blue-900/20 inline-block px-2 py-0.5 rounded-lg">0/0 แห่ง</p>
+                    </div>
+                </div>
+                <div class="card-3d c-emerald rounded-3xl p-5 text-white relative overflow-hidden group">
+                    <i data-lucide="check-circle" class="absolute -right-4 -bottom-4 w-20 h-20 opacity-10"></i>
+                    <div class="relative z-10">
+                        <span class="text-[10px] font-black uppercase tracking-widest opacity-80">ส่งข้อมูลทันเวลา</span>
+                        <h3 id="statOnTime" class="text-3xl font-black mb-1 tracking-tighter">0%</h3>
+                        <span class="text-[10px] font-bold uppercase opacity-80">W-Update</span>
+                    </div>
+                </div>
+                <div class="card-3d c-cyan rounded-3xl p-5 text-white relative overflow-hidden group">
+                    <i data-lucide="file-text" class="absolute -right-4 -bottom-4 w-20 h-20 opacity-10"></i>
+                    <div class="relative z-10">
+                        <span class="text-[10px] font-black uppercase tracking-widest opacity-80">ส่ง Zero Report</span>
+                        <h3 id="statZero" class="text-3xl font-black mb-1 tracking-tighter">0</h3>
+                        <span class="text-[10px] font-bold opacity-80">สถานบริการไม่มีผู้ป่วย</span>
+                    </div>
+                </div>
+                <div class="card-3d c-rose rounded-3xl p-5 text-white relative overflow-hidden group">
+                    <i data-lucide="alert-circle" class="absolute -right-4 -bottom-4 w-20 h-20 opacity-10"></i>
+                    <div class="relative z-10">
+                        <span class="text-[10px] font-black uppercase tracking-widest opacity-80">ยังไม่ส่งข้อมูล</span>
+                        <h3 id="statMissing" class="text-3xl font-black mb-1 tracking-tighter">0</h3>
+                        <p class="text-[10px] font-black flex items-center gap-1 uppercase"><i data-lucide="flame" class="w-3 h-3"></i> Tracking Now</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Tables Section -->
+            <div class="bg-white rounded-3xl shadow-lg border border-slate-100 p-6">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
+                        <i data-lucide="list-checks" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-black text-slate-800">สรุปผลการรายงานประจำสัปดาห์</h3>
+                </div>
+
+                <div class="space-y-10">
+                    <!-- Part 1: Mueang District -->
+                    <section>
+                        <div class="mb-4 flex items-center gap-4">
+                            <h4 class="bg-orange-500 text-white px-6 py-2 rounded-xl shadow-lg text-lg font-black border-2 border-white">อำเภอเมืองอุดรธานี</h4>
+                            <div id="mueangTypeSummary" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <div class="overflow-hidden border border-slate-200 rounded-2xl bg-slate-50">
+                            <table class="w-full text-left border-collapse min-w-[800px] text-sm table-fixed">
+                                <thead class="bg-slate-100 border-b border-slate-200 text-slate-500 uppercase tracking-widest text-[10px] font-black">
+                                    <tr>
+                                        <!-- รวมคอลัมน์เพื่อให้ความกว้างตรงกับตารางด้านล่าง -->
+                                        <th colspan="2" class="px-4 py-3 text-left v-divider">ชื่อสถานพยาบาล</th>
+                                        <th class="px-4 py-3 col-stats-total">รพ.สต./ศสม.</th>
+                                        <th class="px-4 py-3 col-stats-item text-emerald-700">ส่งแล้ว</th>
+                                        <th class="px-4 py-3 col-stats-item text-orange-600">ส่งช้า</th>
+                                        <th class="px-4 py-3 col-stats-item text-rose-600">ยังไม่ส่ง</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mueangTableBody" class="font-bold"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Part 2: Other Districts -->
+                    <section>
+                        <div class="mb-4 border-l-4 border-emerald-500 pl-4 flex items-center gap-4">
+                            <h4 class="bg-emerald-700 text-white px-5 py-1.5 rounded-lg shadow-md text-base font-black">อำเภออื่นๆ</h4>
+                            <div id="otherTypeSummary" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <div class="overflow-hidden border border-slate-200 rounded-2xl bg-slate-50">
+                            <table class="w-full text-left border-collapse min-w-[900px] text-sm table-fixed">
+                                <thead class="bg-slate-100 border-b border-slate-200 text-slate-500 uppercase tracking-widest text-[10px] font-black">
+                                    <tr>
+                                        <th class="px-4 py-3 w-[160px] text-left">อำเภอ</th>
+                                        <th class="px-4 py-3 v-divider text-left">ชื่อสถานพยาบาล</th>
+                                        <th class="px-4 py-3 col-stats-total">รพ.สต./ศสม.</th>
+                                        <th class="px-4 py-3 col-stats-item text-emerald-700">ส่งแล้ว</th>
+                                        <th class="px-4 py-3 col-stats-item text-orange-600">ส่งช้า</th>
+                                        <th class="px-4 py-3 col-stats-item text-rose-600">ยังไม่ส่ง</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="otherTableBody" class="font-bold"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-3xl shadow-lg border border-rose-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="alert-triangle" class="w-6 h-6 text-rose-600"></i>
+                            <h3 class="text-base font-black text-rose-600 uppercase tracking-tight">จำนวนหน่วยบริการที่ไม่มีการส่งข้อมูล ติดต่อกัน 3 สัปดาห์</h3>
+                        </div>
+                        <span id="missingBadge" class="bg-rose-500 text-white px-3 py-1 rounded-full font-black text-[10px]">0 แห่ง</span>
+                    </div>
+                    <div id="missingListContainer"></div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl shadow-lg border border-blue-100">
+                    <div class="flex items-center gap-3 mb-4">
+                        <i data-lucide="trending-up" class="w-6 h-6 text-blue-600"></i>
+                        <h3 class="text-base font-black text-slate-800">แนวโน้มผลงานรายสัปดาห์</h3>
+                    </div>
+                    <div class="h-[250px]"><canvas id="historyChart"></canvas></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="mt-10 py-20 bg-white rounded-3xl shadow-xl border-4 border-dashed border-slate-100 flex flex-col items-center justify-center">
+            <i data-lucide="file-spreadsheet" class="w-16 h-16 text-emerald-500 animate-bounce mb-6"></i>
+            <h2 class="text-3xl font-black text-slate-800 mb-2">จังหวัดอุดรธานี</h2>
+            <p class="text-lg text-slate-400 font-bold">กรุณาอัปโหลดไฟล์รายงาน D506 เพื่อเริ่มวิเคราะห์</p>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        let currentCharts = {};
+        const dropZone = document.getElementById('dropZone');
+        const csvInput = document.getElementById('csvInput');
+        const dashboardArea = document.getElementById('dashboardArea');
+        const emptyState = document.getElementById('emptyState');
+
+        dropZone.onclick = () => csvInput.click();
+        csvInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        function handleFile(file) {
+            if (!file) return;
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    renderDashboard(results.data);
+                    dashboardArea.classList.remove('hidden');
+                    emptyState.classList.add('hidden');
+                    lucide.createIcons();
+                }
+            });
+        }
+
+        function renderDashboard(data) {
+            data.forEach(d => {
+                d.week = parseInt(d['สัปดาห์ระบาด']);
+                d.is_sent = d.kpi !== 'ไม่ส่ง';
+                const match = d['สถานพยาบาล']?.match(/\((.*?)\)/);
+                if(match) d['สถานพยาบาล'] = match[1];
+                else d['สถานพยาบาล'] = d['สถานพยาบาล']?.replace(/^[0-9]+\s*/, '') || 'ไม่ระบุ';
+            });
+
+            const maxWeek = Math.max(...data.map(d => d.week));
+            const latestData = data.filter(d => d.week === maxWeek);
+            const allWeeks = [...new Set(data.map(d => d.week))].sort((a,b) => a-b);
+
+            document.getElementById('dropZone').classList.add('hidden');
+            document.getElementById('weekBadgeContainer').classList.remove('hidden');
+            document.getElementById('displayWeek').innerText = maxWeek;
+            document.getElementById('currentWeekRange').innerHTML = `ประมวลผลสัปดาห์ที่ ${maxWeek} สำเร็จ`;
+
+            const getBadgeStyles = (type) => {
+                if (type.includes('ศูนย์') && !type.includes('บริการ')) return 'bg-purple-100 text-purple-700 border-purple-200';
+                if (type.includes('ทั่วไป')) return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+                if (type.includes('ชุมชน')) return 'bg-teal-100 text-teal-700 border-teal-200';
+                if (type.includes('เอกชน')) return 'bg-amber-100 text-amber-700 border-amber-200';
+                if (type.includes('รพ.สต.') || type.includes('ส่งเสริมสุขภาพ')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                return 'bg-slate-100 text-slate-700 border-slate-200';
+            };
+
+            const renderTypeSummary = (subset) => {
+                const counts = {};
+                subset.forEach(d => counts[d.hosp_type_detail] = (counts[d.hosp_type_detail] || 0) + 1);
+                return Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([type, count]) => `
+                    <span class="text-[10px] font-black px-3 py-1 rounded-full border shadow-sm ${getBadgeStyles(type)}">
+                        ${type} : ${count}
+                    </span>
+                `).join('');
+            };
+
+            document.getElementById('mueangTypeSummary').innerHTML = renderTypeSummary(latestData.filter(d => d['อำเภอ']?.includes('เมือง')));
+            document.getElementById('otherTypeSummary').innerHTML = renderTypeSummary(latestData.filter(d => !d['อำเภอ']?.includes('เมือง')));
+
+            const total = latestData.length;
+            const sent = latestData.filter(d => d.is_sent).length;
+            const ontime = latestData.filter(d => d.kpi?.includes('ทันเวลา>')).length;
+            const zero = latestData.filter(d => d.kpi?.includes('Zero')).length;
+            const missing = total - sent;
+
+            document.getElementById('statRate').innerText = `${((sent/total)*100).toFixed(1)}%`;
+            document.getElementById('statCount').innerText = `${sent}/${total} แห่ง`;
+            document.getElementById('statOnTime').innerText = `${((ontime/total)*100).toFixed(1)}%`;
+            document.getElementById('statZero').innerText = zero;
+            document.getElementById('statMissing').innerText = missing;
+
+            const isSub = d => {
+                const t = d.hosp_type_detail || '';
+                return t.includes('ส่งเสริมสุขภาพ') || t.includes('รพ.สต.') || t.includes('ศสม.') || t.includes('บริการ');
+            };
+
+            const mainHosp = latestData.filter(d => !isSub(d));
+            const subStats = {};
+            [...new Set(latestData.map(d => d['อำเภอ']))].filter(Boolean).forEach(amp => {
+                const subs = latestData.filter(d => d['อำเภอ'] === amp && isSub(d));
+                subStats[amp] = {
+                    total: subs.length,
+                    sent: subs.filter(d => d.is_sent).length,
+                    late: subs.filter(d => d.kpi?.includes('ทันเวลา<')).length,
+                    missing: subs.filter(d => !d.is_sent).length
+                };
+            });
+
+            const ampRate = {};
+            Object.keys(subStats).forEach(amp => {
+                const mains = mainHosp.filter(d => d['อำเภอ'] === amp);
+                const t = mains.length + subStats[amp].total;
+                const s = mains.filter(d => d.is_sent).length + subStats[amp].sent;
+                ampRate[amp] = t > 0 ? (s/t)*100 : 0;
+            });
+
+            const getStatusBadge = (kpi, sent) => {
+                if (!sent) return 'bg-rose-600 text-white';
+                if (kpi.includes('ทันเวลา>')) return 'bg-emerald-600 text-white';
+                if (kpi.includes('Zero')) return 'bg-blue-600 text-white';
+                if (kpi.includes('ทันเวลา<')) return 'bg-orange-600 text-white';
+                return 'bg-slate-400 text-white';
+            };
+
+            const getRowBg = (kpi, sent) => {
+                if (!sent) return 'row-missing';
+                if (kpi.includes('ทันเวลา>')) return 'row-sent-ontime';
+                if (kpi.includes('Zero')) return 'row-sent-zero';
+                if (kpi.includes('ทันเวลา<')) return 'row-sent-late';
+                return '';
+            };
+
+            // Part 1: Mueang
+            const mueangRows = mainHosp.filter(d => d['อำเภอ']?.includes('เมือง')).sort((a,b) => {
+                const rank = h => h['สถานพยาบาล'].includes('อุดรธานี') ? 1 : 2;
+                return rank(a) - rank(b);
+            });
+
+            let mueangHTML = '';
+            mueangRows.forEach(d => {
+                const isUdon = d['สถานพยาบาล'].includes('อุดรธานี');
+                const subs = isUdon ? subStats[d['อำเภอ']] : { total: '-', sent: '-', late: '-', missing: '-' };
+                mueangHTML += `
+                    <tr class="${getRowBg(d.kpi, d.is_sent)}">
+                        <!-- รวมคอลัมน์ชื่อโรงพยาบาลและสถานะเพื่อให้ช่องสถิติด้านหลังตรงกัน -->
+                        <td colspan="2" class="px-4 py-3 v-divider">
+                            <span class="text-base font-bold mr-2">${d['สถานพยาบาล']}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase inline-block align-middle ${getStatusBadge(d.kpi, d.is_sent)}">${d.kpi || 'ยังไม่ส่ง'}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center text-slate-500">${subs.total}</td>
+                        <td class="px-4 py-3 text-center ${subs.sent === subs.total && subs.total !== '-' ? 'text-emerald-700' : ''}">${subs.sent}</td>
+                        <td class="px-4 py-3 text-center text-orange-600">${subs.late}</td>
+                        <td class="px-4 py-3 text-center text-rose-600">${subs.missing}</td>
+                    </tr>`;
+            });
+            document.getElementById('mueangTableBody').innerHTML = mueangHTML;
+
+            // Part 2: Others
+            const otherRows = mainHosp.filter(d => !d['อำเภอ']?.includes('เมือง')).sort((a,b) => ampRate[b['อำเภอ']] - ampRate[a['อำเภอ']]);
+            let otherHTML = '';
+            let currentAmp = '';
+            otherRows.forEach((d, i) => {
+                const isNew = currentAmp !== d['อำเภอ'];
+                currentAmp = d['อำเภอ'];
+                const subs = isNew ? subStats[d['อำเภอ']] : { total: '"', sent: '"', late: '"', missing: '"' };
+                let ampDisplay = '';
+                if (isNew) {
+                    const r = ampRate[d['อำเภอ']];
+                    const rClass = r >= 80 ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-700 border border-amber-200';
+                    ampDisplay = `
+                        <div class="flex items-center gap-2 py-1 flex-nowrap whitespace-nowrap overflow-hidden">
+                            <div class="h-6 w-10 bg-white rounded border flex-shrink-0"><canvas id="spark-${d['อำเภอ'].replace(/\s+/g, '-')}"></canvas></div>
+                            <span class="font-black text-[11px] text-slate-700 truncate" title="${d['อำเภอ']}">${d['อำเภอ']}</span>
+                            <span class="text-[8px] px-1 rounded font-black shadow-sm ${rClass}">${r.toFixed(0)}%</span>
+                        </div>`;
+                }
+
+                otherHTML += `
+                    <tr class="${getRowBg(d.kpi, d.is_sent)} ${isNew && i!==0 ? 'border-t-2 border-slate-200' : ''}">
+                        <td class="px-4 py-2">${ampDisplay || '<div class="text-center opacity-20 text-lg">"</div>'}</td>
+                        <td class="px-4 py-2 v-divider">
+                            <span class="mr-1 font-bold text-slate-700">${d['สถานพยาบาล']}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase inline-block align-middle ${getStatusBadge(d.kpi, d.is_sent)}">${d.kpi || 'ยังไม่ส่ง'}</span>
+                        </td>
+                        <td class="px-4 py-2 text-center text-slate-500">${subs.total}</td>
+                        <td class="px-4 py-2 text-center ${subs.sent === subs.total && subs.total !== '"' ? 'text-emerald-700' : ''}">${subs.sent}</td>
+                        <td class="px-4 py-2 text-center text-orange-600">${subs.late}</td>
+                        <td class="px-4 py-2 text-center text-rose-600">${subs.missing}</td>
+                    </tr>`;
+            });
+            document.getElementById('otherTableBody').innerHTML = otherHTML;
+
+            // Bar Sparklines for Others
+            const last5Weeks = allWeeks.slice(-5);
+            [...new Set(otherRows.map(d => d['อำเภอ']))].forEach(amp => {
+                const ctx = document.getElementById(`spark-${amp.replace(/\s+/g, '-')}`);
+                if (ctx) {
+                    const trend = last5Weeks.map(w => {
+                        const wData = data.filter(d => d['อำเภอ'] === amp && d.week === w);
+                        return wData.length ? (wData.filter(d => d.is_sent).length / wData.length) * 100 : 0;
+                    });
+                    new Chart(ctx, {
+                        type: 'bar', data: { labels: last5Weeks, datasets: [{ data: trend, backgroundColor: trend.map(v => v>=80?'#10b981':'#f59e0b') }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: false, tooltip: false }, scales: { x: { display: false }, y: { display: false, min: 0, max: 100 } } }
+                    });
+                }
+            });
+
+            // Missing 3 Weeks
+            const last3 = allWeeks.slice(-3);
+            const listEl = document.getElementById('missingListContainer');
+            if (last3.length >= 3) {
+                const missingNow = latestData.filter(d => !d.is_sent);
+                const conMissing = missingNow.filter(h => !data.some(d => d['สถานพยาบาล'] === h['สถานพยาบาล'] && d['อำเภอ'] === h['อำเภอ'] && last3.includes(d.week) && d.is_sent));
+                document.getElementById('missingBadge').innerText = `${conMissing.length} แห่ง`;
+                
+                if (conMissing.length === 0) {
+                    listEl.innerHTML = `<div class="p-6 text-center text-emerald-500 font-black border-2 border-dashed border-emerald-100 rounded-2xl text-sm">ข้อมูลครบถ้วน</div>`;
+                } else {
+                    const group = {};
+                    conMissing.forEach(h => group[h['อำเภอ']] = (group[h['อำเภอ']] || 0) + 1);
+                    const sorted = Object.entries(group).sort((a,b) => b[1]-a[1]);
+                    const renderCol = (arr) => `
+                        <div class="border rounded-2xl overflow-hidden bg-white">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b"><tr><th class="px-4 py-2 text-center">อำเภอ</th><th class="px-4 py-2 text-center">จำนวนหน่วยบริการ</th></tr></thead>
+                                <tbody class="divide-y divide-slate-50">${arr.map(([a,c]) => `<tr><td class="px-4 py-2 border-l-4 border-rose-500 font-bold">${a}</td><td class="px-4 py-2 text-center text-rose-600 font-black">${c}</td></tr>`).join('')}</tbody>
+                            </table>
+                        </div>`;
+                    const half = Math.ceil(sorted.length / 2);
+                    listEl.innerHTML = `<div class="grid grid-cols-2 gap-4">${renderCol(sorted.slice(0, half))}${sorted.length > half ? renderCol(sorted.slice(half)) : '<div></div>'}</div>`;
+                }
+            } else {
+                listEl.innerHTML = `<div class="p-6 text-center text-slate-400 font-bold text-xs italic">ข้อมูลไม่เพียงพอ</div>`;
+            }
+
+            // History Chart
+            const hist = { on: [], zero: [], late: [], miss: [] };
+            allWeeks.forEach(w => {
+                const wd = data.filter(d => d.week === w);
+                hist.on.push(wd.filter(d => d.kpi?.includes('ทันเวลา>')).length);
+                hist.zero.push(wd.filter(d => d.kpi?.includes('Zero')).length);
+                hist.late.push(wd.filter(d => d.kpi?.includes('ทันเวลา<')).length);
+                hist.miss.push(wd.filter(d => !d.is_sent).length);
+            });
+
+            if (currentCharts.hist) currentCharts.hist.destroy();
+            currentCharts.hist = new Chart(document.getElementById('historyChart'), {
+                type: 'line',
+                data: {
+                    labels: allWeeks.map(w => 'W' + w),
+                    datasets: [
+                        { label: 'ทันเวลา', data: hist.on, borderColor: '#10b981', tension: 0.4, fill: false, pointRadius: 3 },
+                        { label: 'Zero', data: hist.zero, borderColor: '#3b82f6', tension: 0.4, fill: false, pointRadius: 3 },
+                        { label: 'ช้า', data: hist.late, borderColor: '#f59e0b', tension: 0.4, borderDash: [5,5], pointRadius: 3 },
+                        { label: 'ไม่ส่ง', data: hist.miss, borderColor: '#f43f5e', tension: 0.4, fill: false, pointRadius: 3 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
